@@ -3,7 +3,8 @@
     "type": "module",
     "scripts": {
         "dev": "bun --hot server.ts",
-        "build": "rm -rf dist && bun run css:build && bun build entry.ts --outfile=dist/api/index.js --target=node --format=esm --packages=bundle && cp -r public dist/",
+        "build": "bun run css:build && bun build entry.ts --outfile=api/index.js --target=node --format=esm --packages=bundle",
+        "build:vercel": "bun run build && rm -f *.ts && rm -rf routes services components db config lib styles",
         "css": "tailwindcss -i ./styles/input.css -o ./public/styles.css --watch",
         "css:build": "tailwindcss -i ./styles/input.css -o ./public/styles.css --minify",
         "db:generate": "drizzle-kit generate",

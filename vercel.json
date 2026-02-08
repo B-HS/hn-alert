@@ -1,7 +1,11 @@
 {
-  "buildCommand": "bun run build",
-  "outputDirectory": "dist",
+  "buildCommand": "bun run build:vercel",
   "framework": null,
+  "functions": {
+    "api/index.js": {
+      "runtime": "@vercel/node@3"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
