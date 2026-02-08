@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { db, stories, summaries, tags, comments, webhooks } from '@db'
 import { eq, desc, and, like, inArray, sql } from 'drizzle-orm'
-import { registerWebhook, unregisterWebhook, deleteWebhook, listWebhooks } from '@services/webhook'
+import { registerWebhook, unregisterWebhook, deleteWebhook, listWebhooks, testWebhook } from '@services/webhook'
 
 export const api = new Hono()
 
@@ -109,8 +109,6 @@ api.get('/webhooks', async (c) => {
 api.post('/webhooks', async (c) => {
     const body = await c.req.json<{
         url: string
-        name?: string
-        provider?: string
         digestTypes?: string[]
     }>()
 
@@ -124,9 +122,23 @@ api.post('/webhooks', async (c) => {
         return c.json({ error: 'Invalid URL' }, 400)
     }
 
-    await registerWebhook(body.url, body.name, body.provider ?? 'discord', body.digestTypes ?? ['daily', 'weekly', 'monthly'])
+    const existing = await db.select().from(webhooks).where(eq(webhooks.url, body.url)).limit(1)
+    if (existing.length > 0) {
+        return c.json({ error: '이미 등록된 URL입니다' }, 400)
+    }
 
-    return c.json({ success: true, message: 'Webhook registered' })
+    let name: string | null = null
+    try {
+        const res = await fetch(body.url)
+        if (res.ok) {
+            const data = await res.json() as { name?: string }
+            name = data.name ?? null
+        }
+    } catch {}
+
+    await registerWebhook(body.url, name, 'discord', body.digestTypes ?? ['daily', 'weekly', 'monthly'])
+
+    return c.json({ success: true, message: 'Webhook registered', name })
 })
 
 api.delete('/webhooks/:id', async (c) => {
@@ -147,6 +159,26 @@ api.delete('/webhooks/:id', async (c) => {
     return c.json({ success: true, message: 'Webhook deleted' })
 })
 
+api.post('/webhooks/delete-by-url', async (c) => {
+    const body = await c.req.json<{ url: string }>()
+
+    if (!body.url) {
+        return c.json({ error: 'URL is required' }, 400)
+    }
+
+    const existing = await db.select().from(webhooks).where(eq(webhooks.url, body.url))
+
+    if (existing.length === 0) {
+        return c.json({ error: 'Webhook not found' }, 404)
+    }
+
+    for (const webhook of existing) {
+        await deleteWebhook(webhook.id)
+    }
+
+    return c.json({ success: true, message: `${existing.length}개 webhook 삭제됨` })
+})
+
 api.patch('/webhooks/:id/deactivate', async (c) => {
     const id = Number(c.req.param('id'))
 
@@ -157,4 +189,20 @@ api.patch('/webhooks/:id/deactivate', async (c) => {
     await unregisterWebhook(id)
 
     return c.json({ success: true, message: 'Webhook deactivated' })
+})
+
+api.post('/webhooks/:id/test', async (c) => {
+    const id = Number(c.req.param('id'))
+
+    if (isNaN(id)) {
+        return c.json({ error: 'Invalid ID' }, 400)
+    }
+
+    const result = await testWebhook(id)
+
+    if (!result.success && result.error) {
+        return c.json({ error: result.error }, 404)
+    }
+
+    return c.json(result)
 })

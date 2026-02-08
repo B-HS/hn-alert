@@ -159,3 +159,31 @@ export const deleteWebhook = async (id: number) => {
 export const listWebhooks = async () => {
     return db.select().from(webhooks).where(eq(webhooks.isActive, true))
 }
+
+export const testWebhook = async (id: number) => {
+    const webhook = await db.select().from(webhooks).where(eq(webhooks.id, id)).limit(1)
+
+    if (webhook.length === 0) {
+        return { success: false, error: 'Webhook not found' }
+    }
+
+    const testPayload: DigestPayload = {
+        type: 'daily',
+        date: new Date().toISOString().split('T')[0],
+        title: 'HN Digest 테스트 메시지',
+        content: '이것은 테스트 메시지입니다. Webhook이 정상적으로 연결되었습니다.',
+        stories: [
+            {
+                title: '테스트 스토리',
+                summary: '이것은 테스트 스토리입니다.',
+                url: 'https://news.ycombinator.com',
+                score: 100,
+                tags: ['Test'],
+            },
+        ],
+    }
+
+    const success = await sendToWebhook(webhook[0], testPayload)
+
+    return { success, webhookId: id, name: webhook[0].name }
+}

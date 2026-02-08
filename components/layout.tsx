@@ -34,6 +34,9 @@ export const Layout: FC<LayoutProps> = ({ children, title = 'HN Digest', descrip
                             <a href='/tags' className='hover:opacity-80'>
                                 태그
                             </a>
+                            <a href='/subscribe' className='hover:opacity-80'>
+                                구독
+                            </a>
                         </div>
                     </div>
                 </nav>

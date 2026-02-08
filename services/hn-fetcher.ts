@@ -202,7 +202,7 @@ export const syncStories = async (type: StoryType, limit = 100): Promise<{ synce
             synced++
 
             if (item.kids && item.kids.length > 0) {
-                const commentsList = await fetchCommentsRecursive(item.id, item.kids, 0, 3)
+                const commentsList = await fetchCommentsRecursive(item.id, item.kids, 0, 50)
 
                 if (commentsList.length > 0) {
                     await db.delete(comments).where(eq(comments.storyId, item.id))
@@ -222,7 +222,7 @@ export const syncStories = async (type: StoryType, limit = 100): Promise<{ synce
 
     for (const item of updateItems) {
         if (item.kids && item.kids.length > 0) {
-            const commentsList = await fetchCommentsRecursive(item.id, item.kids, 0, 3)
+            const commentsList = await fetchCommentsRecursive(item.id, item.kids, 0, 50)
 
             if (commentsList.length > 0) {
                 await db.delete(comments).where(eq(comments.storyId, item.id))

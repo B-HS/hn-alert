@@ -31,48 +31,55 @@ const getDomain = (url: string | null) => {
 
 export const StoryCard: FC<StoryCardProps> = ({ story, summary, showFullSummary = false }) => {
     const domain = getDomain(story.url)
-    const storyTags = (summary?.tags ?? []) as string[]
+    const storyTags = (story.tags ?? summary?.tags ?? []) as string[]
+    const summaryText = story.contentSummaryKo ?? summary?.summary ?? null
 
     return (
         <Card className='hover:shadow-md transition-shadow'>
             <CardHeader className='pb-2'>
-                <div className='flex items-start gap-3'>
-                    <div className='flex flex-col items-center text-foreground font-semibold text-sm min-w-[40px]'>
-                        <ArrowUp className='w-4 h-4' />
-                        <span>{story.score}</span>
-                    </div>
-                    <div className='flex-1 min-w-0'>
-                        <CardTitle className='text-base font-medium'>
-                            <a
-                                href={story.url ?? `/story/${story.id}`}
-                                target={story.url ? '_blank' : '_self'}
-                                rel='noopener noreferrer'
-                                className='hover:opacity-70 flex items-center gap-1'>
-                                {story.title}
-                                {story.url && <ExternalLink className='w-3 h-3 text-muted-foreground' />}
-                            </a>
-                        </CardTitle>
-                        {domain && <span className='text-xs text-muted-foreground'>({domain})</span>}
-                    </div>
-                </div>
+                <CardTitle className='text-base font-medium'>
+                    <a href={`/story/${story.id}`} className='hover:opacity-70'>
+                        {story.titleKo ?? story.title}
+                    </a>
+                </CardTitle>
+                {story.titleKo && <p className='text-xs text-muted-foreground mt-1'>{story.title}</p>}
             </CardHeader>
             <CardContent>
-                {summary && <p className={cn('text-muted-foreground text-sm mb-3', !showFullSummary && 'line-clamp-2')}>{summary.summary}</p>}
+                {summaryText && <p className={cn('text-muted-foreground text-sm mb-3', !showFullSummary && 'line-clamp-1')}>{summaryText}</p>}
 
                 <div className='flex flex-wrap items-center gap-2 text-xs text-muted-foreground'>
-                    <span>by {story.by}</span>
-                    <span>|</span>
-                    <span>{formatDate(story.time)}</span>
+                    <span className='flex items-center gap-1'>
+                        <ArrowUp className='w-3 h-3' />
+                        {story.score}
+                    </span>
                     <span>|</span>
                     <a href={`/story/${story.id}`} className='hover:text-foreground flex items-center gap-1'>
                         <MessageSquare className='w-3 h-3' />
                         {story.descendants ?? 0}
                     </a>
+                    <span>|</span>
+                    <span>by {story.by}</span>
+                    <span>|</span>
+                    <span>{formatDate(story.time)}</span>
+
+                    {story.url && (
+                        <>
+                            <span>|</span>
+                            <a
+                                href={story.url}
+                                target='_blank'
+                                rel='noopener noreferrer'
+                                className='hover:text-foreground flex items-center gap-1'>
+                                <ExternalLink className='w-3 h-3' />
+                                {domain}
+                            </a>
+                        </>
+                    )}
 
                     {storyTags.length > 0 && (
                         <>
                             <span>|</span>
-                            <div className='flex gap-1'>
+                            <div className='flex flex-wrap gap-1'>
                                 {storyTags.map((tag) => (
                                     <a key={tag} href={`/tag/${encodeURIComponent(tag)}`}>
                                         <Badge variant='secondary'>{tag}</Badge>
