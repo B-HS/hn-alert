@@ -1,6 +1,7 @@
 {
   "buildCommand": "bun run build",
   "outputDirectory": "dist",
+  "framework": null,
   "rewrites": [
     {
       "source": "/(.*)",
