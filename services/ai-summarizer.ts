@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai'
-import { db, summaries, tags, stories, type Story, type Comment, type NewSummary } from '@db'
-import { eq, desc, sql } from 'drizzle-orm'
+import { db, summaries, type Story, type Comment, type NewSummary } from '@db'
+import { eq, desc } from 'drizzle-orm'
 import { env } from '@config/env'
 import { markStorySummarized } from '@services/hn-fetcher'
 
@@ -83,13 +83,6 @@ export const saveSummary = async (storyId: number, result: SummaryResult, summar
         .insert(summaries)
         .values(summaryData)
         .onDuplicateKeyUpdate({ set: { summary: result.summary, tags: result.tags, updatedAt: new Date() } })
-
-    for (const tagName of result.tags) {
-        await db
-            .insert(tags)
-            .values({ name: tagName, usageCount: 1 })
-            .onDuplicateKeyUpdate({ set: { usageCount: sql`usage_count + 1` } })
-    }
 
     await markStorySummarized(storyId)
 }

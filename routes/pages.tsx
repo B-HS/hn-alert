@@ -421,11 +421,16 @@ pages.get('/tag/:name', async (c) => {
 
     const tagInfo = await db.select().from(tags).where(eq(tags.name, name)).limit(1)
 
-    const summaryList = await db
+    const storyList = await db
         .select()
-        .from(summaries)
-        .where(sql`JSON_CONTAINS(${summaries.tags}, ${JSON.stringify([name])})`)
+        .from(stories)
+        .where(sql`JSON_CONTAINS(${stories.tags}, ${JSON.stringify(name)})`)
+        .orderBy(desc(stories.score))
         .limit(50)
+
+    const storyIds = storyList.map((s) => s.id)
+    const summaryList = storyIds.length > 0 ? await db.select().from(summaries).where(inArray(summaries.storyId, storyIds)) : []
+    const summaryMap = new Map(summaryList.map((s) => [s.storyId, s]))
 
     const html = renderToString(
         <Layout title={`태그: ${name}`}>
@@ -434,10 +439,10 @@ pages.get('/tag/:name', async (c) => {
                 {tagInfo[0] && <span className='text-sm font-normal text-muted-foreground ml-2'>({tagInfo[0].usageCount}개 스토리)</span>}
             </h1>
             <div className='space-y-3'>
-                {summaryList.length === 0 ? (
+                {storyList.length === 0 ? (
                     <p className='text-muted-foreground'>해당 태그의 스토리가 없습니다.</p>
                 ) : (
-                    <p className='text-muted-foreground'>스토리를 불러오는 중...</p>
+                    storyList.map((story) => <StoryCard key={story.id} story={story} summary={summaryMap.get(story.id)} />)
                 )}
             </div>
         </Layout>,
