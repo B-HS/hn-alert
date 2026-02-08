@@ -209,7 +209,7 @@ export const syncStories = async (type: StoryType, limit = 100): Promise<{ synce
 
                     for (let i = 0; i < commentsList.length; i += 100) {
                         const batch = commentsList.slice(i, i + 100)
-                        await db.insert(comments).values(batch)
+                        await db.insert(comments).values(batch).onDuplicateKeyUpdate({ set: { id: batch[0].id } })
                     }
                 }
             }
@@ -229,7 +229,7 @@ export const syncStories = async (type: StoryType, limit = 100): Promise<{ synce
 
                 for (let i = 0; i < commentsList.length; i += 100) {
                     const batch = commentsList.slice(i, i + 100)
-                    await db.insert(comments).values(batch)
+                    await db.insert(comments).values(batch).onDuplicateKeyUpdate({ set: { id: batch[0].id } })
                 }
             }
         }
