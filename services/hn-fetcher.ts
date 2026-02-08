@@ -1,5 +1,5 @@
 import { db, stories, comments, type NewStory, type NewComment } from '@db'
-import { eq, inArray, and, lt, gt } from 'drizzle-orm'
+import { eq, inArray, and, lt, gt, sql } from 'drizzle-orm'
 import { parseUrlContent } from '@services/content-parser'
 import { translateStoriesBatch, getExistingTags, updateTagUsage } from '@services/translator'
 
@@ -209,7 +209,7 @@ export const syncStories = async (type: StoryType, limit = 100): Promise<{ synce
 
                     for (let i = 0; i < commentsList.length; i += 100) {
                         const batch = commentsList.slice(i, i + 100)
-                        await db.insert(comments).values(batch).onDuplicateKeyUpdate({ set: { id: batch[0].id } })
+                        await db.insert(comments).values(batch).onDuplicateKeyUpdate({ set: { id: sql`id` } })
                     }
                 }
             }
@@ -229,7 +229,7 @@ export const syncStories = async (type: StoryType, limit = 100): Promise<{ synce
 
                 for (let i = 0; i < commentsList.length; i += 100) {
                     const batch = commentsList.slice(i, i + 100)
-                    await db.insert(comments).values(batch).onDuplicateKeyUpdate({ set: { id: batch[0].id } })
+                    await db.insert(comments).values(batch).onDuplicateKeyUpdate({ set: { id: sql`id` } })
                 }
             }
         }
