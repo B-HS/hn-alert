@@ -101,11 +101,6 @@ api.get('/search', async (c) => {
     return c.json({ stories: storyList, query: q })
 })
 
-api.get('/webhooks', async (c) => {
-    const webhookList = await listWebhooks()
-    return c.json({ webhooks: webhookList })
-})
-
 api.post('/webhooks', async (c) => {
     const body = await c.req.json<{
         url: string
@@ -136,7 +131,7 @@ api.post('/webhooks', async (c) => {
         }
     } catch {}
 
-    await registerWebhook(body.url, name, 'discord', body.digestTypes ?? ['daily', 'weekly', 'monthly'])
+    await registerWebhook(body.url, name ?? undefined, 'discord', body.digestTypes ?? ['daily', 'weekly', 'monthly'])
 
     return c.json({ success: true, message: 'Webhook registered', name })
 })
