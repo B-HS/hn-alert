@@ -3,6 +3,7 @@
     "type": "module",
     "scripts": {
         "dev": "bun --hot server.ts",
+        "build": "bun run css:build && bun build api/index.ts --outdir=api --target=node --format=esm --external=@hono/node-server",
         "css": "tailwindcss -i ./styles/input.css -o ./public/styles.css --watch",
         "css:build": "tailwindcss -i ./styles/input.css -o ./public/styles.css --minify",
         "db:generate": "drizzle-kit generate",
@@ -35,6 +36,7 @@
         "feconfig-bhs": "^1.0.7",
         "postcss": "^8.5.6",
         "tailwindcss": "^4.1.18",
+        "tsup": "^8.5.1",
         "tsx": "^4.7.1",
         "typescript": "^5.8.3"
     }

@@ -1,22 +1,27 @@
 {
-    "buildCommand": "bun run css:build",
-    "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
-    "crons": [
-        {
-            "path": "/api/cron/sync",
-            "schedule": "0 * * * *"
-        },
-        {
-            "path": "/api/cron/daily",
-            "schedule": "0 21 * * *"
-        },
-        {
-            "path": "/api/cron/weekly",
-            "schedule": "0 9 * * 0"
-        },
-        {
-            "path": "/api/cron/monthly",
-            "schedule": "0 8 28-31 * *"
-        }
-    ]
+  "buildCommand": "bun run build",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/sync",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/daily",
+      "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/cron/weekly",
+      "schedule": "0 9 * * 0"
+    },
+    {
+      "path": "/api/cron/monthly",
+      "schedule": "0 8 28-31 * *"
+    }
+  ]
 }
