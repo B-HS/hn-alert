@@ -1,0 +1,41 @@
+{
+    "name": "hn-digest",
+    "type": "module",
+    "scripts": {
+        "dev": "bun --hot server.ts",
+        "css": "tailwindcss -i ./styles/input.css -o ./public/styles.css --watch",
+        "css:build": "tailwindcss -i ./styles/input.css -o ./public/styles.css --minify",
+        "db:generate": "drizzle-kit generate",
+        "db:migrate": "bun db/migrate.ts",
+        "db:studio": "drizzle-kit studio"
+    },
+    "dependencies": {
+        "@google/genai": "^1.40.0",
+        "@hono/node-server": "^1.19.9",
+        "@hono/react-renderer": "^1.0.1",
+        "@mozilla/readability": "^0.6.0",
+        "class-variance-authority": "^0.7.1",
+        "clsx": "^2.1.1",
+        "drizzle-orm": "^0.45.1",
+        "hono": "^4.11.8",
+        "linkedom": "^0.18.12",
+        "lucide-react": "^0.563.0",
+        "mysql2": "^3.16.3",
+        "react": "^19.2.4",
+        "react-dom": "^19.2.4",
+        "tailwind-merge": "^3.4.0"
+    },
+    "devDependencies": {
+        "@tailwindcss/cli": "^4.1.18",
+        "@types/node": "^20.11.17",
+        "@types/react": "^19.2.13",
+        "@types/react-dom": "^19.2.3",
+        "autoprefixer": "^10.4.24",
+        "drizzle-kit": "^0.31.8",
+        "feconfig-bhs": "^1.0.7",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^4.1.18",
+        "tsx": "^4.7.1",
+        "typescript": "^5.8.3"
+    }
+}

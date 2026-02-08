@@ -1,0 +1,24 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "strict": true,
+        "skipLibCheck": true,
+        "types": ["node"],
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "outDir": "./dist",
+        "baseUrl": ".",
+        "paths": {
+            "@db": ["db/index.ts"],
+            "@db/*": ["db/*"],
+            "@services/*": ["services/*"],
+            "@routes/*": ["routes/*"],
+            "@components/*": ["components/*"],
+            "@config/*": ["config/*"],
+            "@lib/*": ["lib/*"]
+        }
+    },
+    "exclude": ["node_modules"]
+}
