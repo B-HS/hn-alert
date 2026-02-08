@@ -64,13 +64,9 @@ const safeJsonParse = (text: string, storyInputs: StoryInput[]): StoryTranslatio
     const jsonMatch = text.match(/\[[\s\S]*\]/)
 
     if (!jsonMatch) {
-        console.error('[Translator] No JSON array found in response')
+        console.error('[Translator] No JSON array found in response, skipping batch for retry')
         console.error('[Translator] Response preview:', text.slice(0, 500))
-        return storyInputs.map((s) => ({
-            id: s.id,
-            titleKo: s.title,
-            tags: [],
-        }))
+        return []
     }
 
     try {
@@ -84,7 +80,7 @@ const safeJsonParse = (text: string, storyInputs: StoryInput[]): StoryTranslatio
         }>
 
         return parsed
-            .map((p) => {
+            .map((p): StoryTranslation | null => {
                 const original = storyInputs[p.idx]
                 if (!original) {
                     console.warn(`[Translator] Invalid idx ${p.idx}, skipping`)
@@ -93,21 +89,17 @@ const safeJsonParse = (text: string, storyInputs: StoryInput[]): StoryTranslatio
                 return {
                     id: original.id,
                     titleKo: p.titleKo ?? original.title,
-                    storyTextKo: p.storyTextKo,
-                    contentSummary: p.contentSummary,
-                    contentSummaryKo: p.contentSummaryKo,
+                    ...(p.storyTextKo && { storyTextKo: p.storyTextKo }),
+                    ...(p.contentSummary && { contentSummary: p.contentSummary }),
+                    ...(p.contentSummaryKo && { contentSummaryKo: p.contentSummaryKo }),
                     tags: Array.isArray(p.tags) ? p.tags.slice(0, 3) : [],
                 }
             })
             .filter((t): t is StoryTranslation => t !== null)
     } catch (parseError) {
-        console.error('[Translator] JSON parse failed:', parseError)
+        console.error('[Translator] JSON parse failed, skipping batch for retry:', parseError)
         console.error('[Translator] Raw JSON:', jsonMatch[0].slice(0, 1000))
-        return storyInputs.map((s) => ({
-            id: s.id,
-            titleKo: s.title,
-            tags: [],
-        }))
+        return []
     }
 }
 
@@ -118,8 +110,8 @@ const translateBatchWithRetry = async (storyInputs: StoryInput[], existingTags: 
         idx,
         id: s.id,
         title: s.title,
-        storyText: s.storyText?.slice(0, 1000) ?? null,
-        content: s.content?.slice(0, 2000) ?? null,
+        storyText: s.storyText?.slice(0, 5000) ?? null,
+        content: s.content?.slice(0, 12000) ?? null,
     }))
 
     const prompt = `
@@ -150,8 +142,11 @@ IMPORTANT: Return ONLY valid JSON array, no other text. Make sure JSON is comple
     try {
         console.log(`[Translator] Sending request to Gemini...`)
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.5-flash-lite',
             contents: prompt,
+            config: {
+                maxOutputTokens: 16384,
+            },
         })
         console.log(`[Translator] Received response from Gemini`)
 

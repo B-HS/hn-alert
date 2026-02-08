@@ -59,7 +59,7 @@ export const summaries = mysqlTable(
         summary: text('summary').notNull(),
         tags: json('tags').$type<string[]>().default([]),
         summaryType: varchar('summary_type', { length: 20 }).notNull().default('daily'),
-        model: varchar('model', { length: 50 }).default('gemini-2.5-flash'),
+        model: varchar('model', { length: 50 }).default('gemini-2.5-flash-lite'),
         createdAt: timestamp('created_at').defaultNow(),
         updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
     },
