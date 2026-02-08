@@ -3,7 +3,7 @@
     "type": "module",
     "scripts": {
         "dev": "bun --hot server.ts",
-        "build": "bun run css:build && bun build api/index.ts --outdir=api --target=node --format=esm --external=@hono/node-server",
+        "build": "bun run css:build && bun build vercel.ts --outfile=api/index.js --target=node --format=esm --packages=bundle",
         "css": "tailwindcss -i ./styles/input.css -o ./public/styles.css --watch",
         "css:build": "tailwindcss -i ./styles/input.css -o ./public/styles.css --minify",
         "db:generate": "drizzle-kit generate",
