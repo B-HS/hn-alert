@@ -27,6 +27,7 @@ lerna-debug.log*
 # build
 api/
 dist/
+.vercel/output/
 
 # misc
 .DS_Store

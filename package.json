@@ -4,7 +4,7 @@
     "scripts": {
         "dev": "bun --hot server.ts",
         "build": "bun run css:build && bun build entry.ts --outfile=api/index.js --target=node --format=esm --packages=bundle",
-        "build:vercel": "bun run build && rm -f *.ts && rm -rf routes services components db config lib styles",
+        "vercel-build": "bun scripts/vercel-build.ts",
         "css": "tailwindcss -i ./styles/input.css -o ./public/styles.css --watch",
         "css:build": "tailwindcss -i ./styles/input.css -o ./public/styles.css --minify",
         "db:generate": "drizzle-kit generate",

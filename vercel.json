@@ -1,17 +1,8 @@
 {
-  "buildCommand": "bun run build:vercel",
+  "installCommand": "bun install",
+  "buildCommand": "bun run vercel-build",
+  "outputDirectory": ".vercel/output",
   "framework": null,
-  "functions": {
-    "api/index.js": {
-      "maxDuration": 30
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api"
-    }
-  ],
   "crons": [
     {
       "path": "/api/cron/sync",
