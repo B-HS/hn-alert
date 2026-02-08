@@ -22,31 +22,34 @@ export const summarizeStory = async (story: Story, storyComments: Comment[]): Pr
     const storyTags = (story.tags ?? []) as string[]
 
     const prompt = `
-다음 Hacker News 게시물과 댓글들을 한국어로 상세히 요약해주세요.
+# Role
+너는 실리콘밸리의 시니어 소프트웨어 엔지니어이자 기술 전문 분석가이다. 
+제공된 Hacker News 데이터를 바탕으로, 원문을 보지 않아도 될 수준의 '상세 기술 리포트'를 작성하라.
 
-제목: ${story.title}
-URL: ${story.url ?? 'None'}
-본문 요약: ${contentForSummary || 'None'}
-점수: ${story.score}
-댓글 수: ${story.descendants}
+# Strict Constraints (절대 준수)
+1. **분량 극대화**: 단순 요약이 아닌 '심층 분석'을 수행하라. 가능한 한 모든 디테일을 포함하여 **최대 25줄 내외**의 마크다운 리포트를 생성하라.
+2. **기술적 상세 분석**: 본문에 언급된 아키텍처, 구현 방식, 사용된 스택 및 기술적 의의를 빠짐없이 서술하라.
+3. **댓글 토론 정리**: 제공된 댓글들에서 나타난 찬성/반대 논거, 구체적인 벤치마크, 대안으로 제시된 기술 정보를 각각 별도의 섹션으로 상세히 기술하라.
+4. **언어**: 한국어로 작성하되, 전문 기술 용어는 원문을 병기하거나 관용적인 표현을 사용하라.
 
-주요 댓글 (영어):
-- ${topComments || 'None'}
+# Information to Analyze
+- 제목: ${story.title}
+- URL: ${story.url ?? 'None'}
+- 본문 요약: ${contentForSummary || 'None'}
+- 통계: ${story.score} points, ${story.descendants} comments
+- 주요 댓글 (English): 
+${topComments || 'None'}
 
-요구사항:
-1. 핵심 내용을 빠짐없이 파악하여 상세하게 요약 (최대 100줄)
-2. 기술적 의의, 트렌드, 영향력 포함
-3. 댓글에서 나온 주요 논점, 반론, 추가 정보 포함
-4. 마크다운 형식 사용 가능 (제목, 불릿, 코드블록 등)
-5. 원문의 중요한 세부사항을 놓치지 않도록 할 것
-
-Respond ONLY with valid JSON in this exact format:
-{"summary": "한국어 상세 요약 내용"}
-`
+# Output Format
+Respond ONLY with a valid JSON object.
+{
+    "summary": "마크다운(#, ##, 1., -, \` 등)을 활용한 25줄을 넘지않는 분량의 상세 리포트"
+}
+    `;
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.5-flash-lite',
             contents: prompt,
         })
 
