@@ -6,6 +6,7 @@ import { Layout } from '@components/layout'
 import { StoryCard } from '@components/story-card'
 import { CommentTree } from '@components/comment-tree'
 import { Pagination } from '@components/ui/pagination'
+import { generateHTMLFromMarkdown } from '@lib/markdown'
 
 export const pages = new Hono()
 
@@ -20,7 +21,10 @@ pages.get('/', async (c) => {
 
     const categoryCounts = await Promise.all(
         validCategories.map(async (cat) => {
-            const result = await db.select({ count: sql<number>`count(*)` }).from(stories).where(eq(stories.type, cat))
+            const result = await db
+                .select({ count: sql<number>`count(*)` })
+                .from(stories)
+                .where(eq(stories.type, cat))
             return { category: cat, count: result[0]?.count ?? 0 }
         }),
     )
@@ -245,14 +249,14 @@ pages.get('/daily/:date', async (c) => {
 
     const summaryMap = new Map(summaryList.map((s) => [s.storyId, s]))
 
+    const contentHTML = await generateHTMLFromMarkdown(digest[0].content)
+
     const html = renderToString(
         <Layout title={digest[0].title}>
             <div className='max-w-4xl mx-auto'>
                 <h1 className='text-2xl font-bold text-foreground mb-4'>{digest[0].title}</h1>
-                <div className='prose max-w-none bg-card rounded-lg p-6 shadow-sm border mb-8'>
-                    {digest[0].content.split('\n').map((line, i) => (
-                        <p key={i}>{line}</p>
-                    ))}
+                <div className='prose max-w-none bg-card rounded-lg p-6 shadow-sm border mb-8 dark:prose-invert'>
+                    <div dangerouslySetInnerHTML={{ __html: contentHTML }} />
                 </div>
 
                 <h2 className='text-xl font-bold text-foreground mb-4'>포함된 스토리</h2>
@@ -511,9 +515,7 @@ pages.get('/subscribe', async (c) => {
                             </div>
                         </div>
                         <div className='flex gap-2'>
-                            <button
-                                type='submit'
-                                className='flex-1 bg-primary text-primary-foreground py-2 rounded-lg font-medium hover:opacity-90'>
+                            <button type='submit' className='flex-1 bg-primary text-primary-foreground py-2 rounded-lg font-medium hover:opacity-90'>
                                 등록하기
                             </button>
                             <button
@@ -540,9 +542,7 @@ pages.get('/subscribe', async (c) => {
                                 className='w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary'
                             />
                         </div>
-                        <button
-                            type='submit'
-                            className='w-full bg-secondary text-secondary-foreground py-2 rounded-lg font-medium hover:opacity-90'>
+                        <button type='submit' className='w-full bg-secondary text-secondary-foreground py-2 rounded-lg font-medium hover:opacity-90'>
                             구독 해제
                         </button>
                     </form>
