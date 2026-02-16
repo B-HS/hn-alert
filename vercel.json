@@ -1,24 +1,6 @@
 {
-  "installCommand": "bun install",
-  "buildCommand": "bun run vercel-build",
-  "outputDirectory": ".vercel/output",
-  "framework": null,
-  "crons": [
-    {
-      "path": "/api/cron/sync",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/daily",
-      "schedule": "0 21 * * *"
-    },
-    {
-      "path": "/api/cron/weekly",
-      "schedule": "0 9 * * 0"
-    },
-    {
-      "path": "/api/cron/monthly",
-      "schedule": "0 8 28-31 * *"
-    }
-  ]
+    "installCommand": "bun install",
+    "buildCommand": "bun run vercel-build",
+    "outputDirectory": ".vercel/output",
+    "framework": null
 }

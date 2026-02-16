@@ -1,5 +1,5 @@
 import type { FC, HTMLAttributes } from 'react'
-import { cn } from '@lib/utils'
+import { cn } from '../../lib/utils'
 
 export const Card: FC<HTMLAttributes<HTMLDivElement>> = ({ className, ...props }) => (
     <div className={cn('rounded-lg border bg-card text-card-foreground shadow-sm', className)} {...props} />

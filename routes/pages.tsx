@@ -1,12 +1,19 @@
 import { Hono } from 'hono'
 import { renderToString } from 'react-dom/server'
-import { db, stories, summaries, digests, comments, tags, webhooks } from '@db'
-import { eq, desc, and, inArray, sql } from 'drizzle-orm'
-import { Layout } from '@components/layout'
-import { StoryCard } from '@components/story-card'
-import { CommentTree } from '@components/comment-tree'
-import { Pagination } from '@components/ui/pagination'
-import { generateHTMLFromMarkdown } from '@lib/markdown'
+import { Layout } from '../components/layout'
+import { StoryCard } from '../components/story-card'
+import { CommentTree } from '../components/comment-tree'
+import { Pagination } from '../components/ui/pagination'
+import { generateHTMLFromMarkdown } from '../lib/markdown'
+import {
+    fetchStories,
+    fetchStoryDetail,
+    fetchStoryCounts,
+    fetchDigests,
+    fetchDigestDetail,
+    fetchTags,
+    fetchTagStories,
+} from '../lib/api-client'
 
 export const pages = new Hono()
 
@@ -17,49 +24,30 @@ pages.get('/', async (c) => {
     const validCategories = ['top', 'new', 'best']
     const currentCategory = validCategories.includes(category) ? category : 'top'
 
-    const latestDigest = await db.select().from(digests).orderBy(desc(digests.createdAt)).limit(1)
+    const [storiesData, countsData, latestDigestData] = await Promise.all([
+        fetchStories(currentCategory, page, perPage),
+        fetchStoryCounts(),
+        fetchDigests('daily', 1).catch(() => ({ digests: [] })),
+    ])
 
-    const categoryCounts = await Promise.all(
-        validCategories.map(async (cat) => {
-            const result = await db
-                .select({ count: sql<number>`count(*)` })
-                .from(stories)
-                .where(eq(stories.type, cat))
-            return { category: cat, count: result[0]?.count ?? 0 }
-        }),
-    )
-    const countMap = Object.fromEntries(categoryCounts.map((c) => [c.category, c.count]))
-
+    const countMap = Object.fromEntries(countsData.counts.map((c) => [c.type, c.count]))
     const totalCount = countMap[currentCategory] ?? 0
     const totalPages = Math.ceil(totalCount / perPage)
-    const offset = (page - 1) * perPage
-
-    const storyList = await db
-        .select()
-        .from(stories)
-        .where(eq(stories.type, currentCategory))
-        .orderBy(currentCategory === 'new' ? desc(stories.time) : desc(stories.score))
-        .limit(perPage)
-        .offset(offset)
-
-    const storyIds = storyList.map((s) => s.id)
-    const summaryList = storyIds.length > 0 ? await db.select().from(summaries).where(inArray(summaries.storyId, storyIds)) : []
-
-    const summaryMap = new Map(summaryList.map((s) => [s.storyId, s]))
+    const latestDigest = latestDigestData.digests[0] ?? null
 
     const categoryLabels: Record<string, string> = { top: '인기', new: '최신', best: '베스트' }
 
     const html = renderToString(
         <Layout title={`HN Digest - ${categoryLabels[currentCategory]}`}>
             <div className='space-y-8'>
-                {latestDigest[0] && (
+                {latestDigest && (
                     <section className='bg-primary text-primary-foreground rounded-xl p-6 shadow-lg'>
-                        <h2 className='text-xl font-bold mb-2'>{latestDigest[0].title}</h2>
+                        <h2 className='text-xl font-bold mb-2'>{latestDigest.title}</h2>
                         <div className='prose prose-invert prose-sm max-w-none opacity-90'>
-                            {latestDigest[0].content.split('\n').slice(0, 3).join('\n')}...
+                            {latestDigest.content.split('\n').slice(0, 3).join('\n')}...
                         </div>
                         <a
-                            href={`/${latestDigest[0].digestType}/${latestDigest[0].digestKey}`}
+                            href={`/${latestDigest.digestType}/${latestDigest.digestKey}`}
                             className='inline-block mt-4 bg-background text-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90'>
                             전체 보기
                         </a>
@@ -69,7 +57,7 @@ pages.get('/', async (c) => {
                 <section>
                     <div className='flex items-center gap-2 mb-4 flex-wrap'>
                         {validCategories
-                            .filter((cat) => countMap[cat] > 0)
+                            .filter((cat) => (countMap[cat] ?? 0) > 0)
                             .map((cat) => (
                                 <a
                                     key={cat}
@@ -85,10 +73,10 @@ pages.get('/', async (c) => {
                             ))}
                     </div>
                     <div className='space-y-3'>
-                        {storyList.map((story) => (
-                            <StoryCard key={story.id} story={story} summary={summaryMap.get(story.id)} />
+                        {storiesData.stories.map((story) => (
+                            <StoryCard key={story.id} story={story} summary={story.summary} />
                         ))}
-                        {storyList.length === 0 && <p className='text-muted-foreground'>스토리가 없습니다.</p>}
+                        {storiesData.stories.length === 0 && <p className='text-muted-foreground'>스토리가 없습니다.</p>}
                     </div>
                     <Pagination currentPage={page} totalPages={totalPages} baseUrl={`/?category=${currentCategory}`} />
                 </section>
@@ -102,9 +90,83 @@ pages.get('/', async (c) => {
 pages.get('/story/:id', async (c) => {
     const id = Number(c.req.param('id'))
 
-    const story = await db.select().from(stories).where(eq(stories.id, id)).limit(1)
+    try {
+        const data = await fetchStoryDetail(id)
+        const s = data.story
+        const summaryText = s.contentSummaryKo ?? data.summary?.summary ?? null
+        const storyTags = (s.tags ?? data.summary?.tags ?? []) as string[]
 
-    if (story.length === 0) {
+        const getDomain = (url: string | null) => {
+            if (!url) return null
+            try {
+                return new URL(url).hostname.replace('www.', '')
+            } catch {
+                return null
+            }
+        }
+
+        const html = renderToString(
+            <Layout title={s.titleKo ?? s.title ?? 'HN Digest'}>
+                <article className='max-w-4xl mx-auto'>
+                    <div className='bg-card rounded-lg shadow-sm border p-6 mb-6'>
+                        <h1 className='text-2xl font-bold text-foreground mb-2'>{s.titleKo ?? s.title}</h1>
+                        {s.titleKo && <p className='text-sm text-muted-foreground mb-4'>{s.title}</p>}
+
+                        <div className='flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-4'>
+                            <span>{s.score} points</span>
+                            <span>by {s.by}</span>
+                            <span>{s.time ? new Date(s.time * 1000).toLocaleDateString('ko-KR') : ''}</span>
+                            <span>{s.descendants ?? 0} comments</span>
+                        </div>
+
+                        {s.url && (
+                            <a
+                                href={s.url}
+                                target='_blank'
+                                rel='noopener noreferrer'
+                                className='inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 mb-4'>
+                                원문 보기 ({getDomain(s.url)})
+                            </a>
+                        )}
+
+                        {storyTags.length > 0 && (
+                            <div className='flex flex-wrap gap-2 mb-4'>
+                                {storyTags.map((tag) => (
+                                    <a
+                                        key={tag}
+                                        href={`/tag/${encodeURIComponent(tag)}`}
+                                        className='px-3 py-1 bg-secondary text-secondary-foreground rounded-full text-sm hover:opacity-80'>
+                                        {tag}
+                                    </a>
+                                ))}
+                            </div>
+                        )}
+
+                        {s.storyTextKo && (
+                            <div className='bg-secondary/50 rounded-lg p-4 mb-4'>
+                                <p className='text-foreground whitespace-pre-wrap'>{s.storyTextKo}</p>
+                                {s.storyText && <p className='text-sm text-muted-foreground mt-2 whitespace-pre-wrap'>{s.storyText}</p>}
+                            </div>
+                        )}
+
+                        {summaryText && (
+                            <div className='border-t pt-4'>
+                                <h2 className='text-lg font-semibold text-foreground mb-2'>요약</h2>
+                                <p className='text-muted-foreground whitespace-pre-wrap'>{summaryText}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <section>
+                        <h2 className='text-lg font-bold text-foreground mb-4'>댓글 ({data.comments.length})</h2>
+                        <CommentTree comments={data.comments} />
+                    </section>
+                </article>
+            </Layout>,
+        )
+
+        return c.html(`<!DOCTYPE html>${html}`)
+    } catch {
         const html = renderToString(
             <Layout title='스토리를 찾을 수 없습니다'>
                 <div className='text-center py-12'>
@@ -118,100 +180,22 @@ pages.get('/story/:id', async (c) => {
         )
         return c.html(`<!DOCTYPE html>${html}`, 404)
     }
-
-    const summary = await db.select().from(summaries).where(eq(summaries.storyId, id)).limit(1)
-    const commentList = await db.select().from(comments).where(eq(comments.storyId, id)).orderBy(comments.depth, comments.time)
-
-    const s = story[0]
-    const summaryText = s.contentSummaryKo ?? summary[0]?.summary ?? null
-    const storyTags = (s.tags ?? summary[0]?.tags ?? []) as string[]
-
-    const getDomain = (url: string | null) => {
-        if (!url) return null
-        try {
-            return new URL(url).hostname.replace('www.', '')
-        } catch {
-            return null
-        }
-    }
-
-    const html = renderToString(
-        <Layout title={s.titleKo ?? s.title ?? 'HN Digest'}>
-            <article className='max-w-4xl mx-auto'>
-                <div className='bg-card rounded-lg shadow-sm border p-6 mb-6'>
-                    <h1 className='text-2xl font-bold text-foreground mb-2'>{s.titleKo ?? s.title}</h1>
-                    {s.titleKo && <p className='text-sm text-muted-foreground mb-4'>{s.title}</p>}
-
-                    <div className='flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-4'>
-                        <span>{s.score} points</span>
-                        <span>by {s.by}</span>
-                        <span>{s.time ? new Date(s.time * 1000).toLocaleDateString('ko-KR') : ''}</span>
-                        <span>{s.descendants ?? 0} comments</span>
-                    </div>
-
-                    {s.url && (
-                        <a
-                            href={s.url}
-                            target='_blank'
-                            rel='noopener noreferrer'
-                            className='inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 mb-4'>
-                            원문 보기 ({getDomain(s.url)})
-                        </a>
-                    )}
-
-                    {storyTags.length > 0 && (
-                        <div className='flex flex-wrap gap-2 mb-4'>
-                            {storyTags.map((tag) => (
-                                <a
-                                    key={tag}
-                                    href={`/tag/${encodeURIComponent(tag)}`}
-                                    className='px-3 py-1 bg-secondary text-secondary-foreground rounded-full text-sm hover:opacity-80'>
-                                    {tag}
-                                </a>
-                            ))}
-                        </div>
-                    )}
-
-                    {s.storyTextKo && (
-                        <div className='bg-secondary/50 rounded-lg p-4 mb-4'>
-                            <p className='text-foreground whitespace-pre-wrap'>{s.storyTextKo}</p>
-                            {s.storyText && <p className='text-sm text-muted-foreground mt-2 whitespace-pre-wrap'>{s.storyText}</p>}
-                        </div>
-                    )}
-
-                    {summaryText && (
-                        <div className='border-t pt-4'>
-                            <h2 className='text-lg font-semibold text-foreground mb-2'>요약</h2>
-                            <p className='text-muted-foreground whitespace-pre-wrap'>{summaryText}</p>
-                        </div>
-                    )}
-                </div>
-
-                <section>
-                    <h2 className='text-lg font-bold text-foreground mb-4'>댓글 ({commentList.length})</h2>
-                    <CommentTree comments={commentList} />
-                </section>
-            </article>
-        </Layout>,
-    )
-
-    return c.html(`<!DOCTYPE html>${html}`)
 })
 
 pages.get('/daily', async (c) => {
-    const digestList = await db.select().from(digests).where(eq(digests.digestType, 'daily')).orderBy(desc(digests.createdAt)).limit(30)
+    const data = await fetchDigests('daily', 30)
 
     const html = renderToString(
         <Layout title='일간 다이제스트'>
             <h1 className='text-2xl font-bold text-foreground mb-6'>일간 다이제스트</h1>
             <div className='space-y-4'>
-                {digestList.map((digest) => (
+                {data.digests.map((digest) => (
                     <a
                         key={digest.id}
                         href={`/daily/${digest.digestKey}`}
                         className='block bg-card rounded-lg shadow-sm border p-4 hover:shadow-md transition-shadow'>
                         <h3 className='font-medium text-card-foreground'>{digest.title}</h3>
-                        <p className='text-sm text-muted-foreground mt-1'>{((digest.storyIds ?? []) as number[]).length}개 스토리</p>
+                        <p className='text-sm text-muted-foreground mt-1'>{(digest.storyIds ?? []).length}개 스토리</p>
                     </a>
                 ))}
             </div>
@@ -224,13 +208,30 @@ pages.get('/daily', async (c) => {
 pages.get('/daily/:date', async (c) => {
     const date = c.req.param('date')
 
-    const digest = await db
-        .select()
-        .from(digests)
-        .where(and(eq(digests.digestType, 'daily'), eq(digests.digestKey, date)))
-        .limit(1)
+    try {
+        const data = await fetchDigestDetail('daily', date)
+        const contentHTML = await generateHTMLFromMarkdown(data.digest.content)
 
-    if (digest.length === 0) {
+        const html = renderToString(
+            <Layout title={data.digest.title}>
+                <div className='max-w-4xl mx-auto'>
+                    <h1 className='text-2xl font-bold text-foreground mb-4'>{data.digest.title}</h1>
+                    <div className='prose max-w-none bg-card rounded-lg p-6 shadow-sm border mb-8 dark:prose-invert'>
+                        <div dangerouslySetInnerHTML={{ __html: String(contentHTML) }} />
+                    </div>
+
+                    <h2 className='text-xl font-bold text-foreground mb-4'>포함된 스토리</h2>
+                    <div className='space-y-3'>
+                        {data.stories.map((story) => (
+                            <StoryCard key={story.id} story={story} summary={story.summary} />
+                        ))}
+                    </div>
+                </div>
+            </Layout>,
+        )
+
+        return c.html(`<!DOCTYPE html>${html}`)
+    } catch {
         const html = renderToString(
             <Layout title='다이제스트를 찾을 수 없습니다'>
                 <div className='text-center py-12'>
@@ -241,51 +242,22 @@ pages.get('/daily/:date', async (c) => {
         )
         return c.html(`<!DOCTYPE html>${html}`, 404)
     }
-
-    const storyIds = (digest[0].storyIds ?? []) as number[]
-    const storyList = storyIds.length > 0 ? await db.select().from(stories).where(inArray(stories.id, storyIds)) : []
-
-    const summaryList = storyIds.length > 0 ? await db.select().from(summaries).where(inArray(summaries.storyId, storyIds)) : []
-
-    const summaryMap = new Map(summaryList.map((s) => [s.storyId, s]))
-
-    const contentHTML = await generateHTMLFromMarkdown(digest[0].content)
-
-    const html = renderToString(
-        <Layout title={digest[0].title}>
-            <div className='max-w-4xl mx-auto'>
-                <h1 className='text-2xl font-bold text-foreground mb-4'>{digest[0].title}</h1>
-                <div className='prose max-w-none bg-card rounded-lg p-6 shadow-sm border mb-8 dark:prose-invert'>
-                    <div dangerouslySetInnerHTML={{ __html: contentHTML }} />
-                </div>
-
-                <h2 className='text-xl font-bold text-foreground mb-4'>포함된 스토리</h2>
-                <div className='space-y-3'>
-                    {storyList.map((story) => (
-                        <StoryCard key={story.id} story={story} summary={summaryMap.get(story.id)} />
-                    ))}
-                </div>
-            </div>
-        </Layout>,
-    )
-
-    return c.html(`<!DOCTYPE html>${html}`)
 })
 
 pages.get('/weekly', async (c) => {
-    const digestList = await db.select().from(digests).where(eq(digests.digestType, 'weekly')).orderBy(desc(digests.createdAt)).limit(12)
+    const data = await fetchDigests('weekly', 12)
 
     const html = renderToString(
         <Layout title='주간 다이제스트'>
             <h1 className='text-2xl font-bold text-foreground mb-6'>주간 다이제스트</h1>
             <div className='grid gap-4 md:grid-cols-2'>
-                {digestList.map((digest) => (
+                {data.digests.map((digest) => (
                     <a
                         key={digest.id}
                         href={`/weekly/${digest.digestKey}`}
                         className='block bg-card rounded-lg shadow-sm border p-4 hover:shadow-md transition-shadow'>
                         <h3 className='font-medium text-card-foreground'>{digest.title}</h3>
-                        <p className='text-sm text-muted-foreground mt-1'>{((digest.storyIds ?? []) as number[]).length}개 스토리</p>
+                        <p className='text-sm text-muted-foreground mt-1'>{(digest.storyIds ?? []).length}개 스토리</p>
                     </a>
                 ))}
             </div>
@@ -298,13 +270,31 @@ pages.get('/weekly', async (c) => {
 pages.get('/weekly/:week', async (c) => {
     const week = c.req.param('week')
 
-    const digest = await db
-        .select()
-        .from(digests)
-        .where(and(eq(digests.digestType, 'weekly'), eq(digests.digestKey, week)))
-        .limit(1)
+    try {
+        const data = await fetchDigestDetail('weekly', week)
 
-    if (digest.length === 0) {
+        const html = renderToString(
+            <Layout title={data.digest.title}>
+                <div className='max-w-4xl mx-auto'>
+                    <h1 className='text-2xl font-bold text-foreground mb-4'>{data.digest.title}</h1>
+                    <div className='prose max-w-none bg-card rounded-lg p-6 shadow-sm border mb-8'>
+                        {data.digest.content.split('\n').map((line, i) => (
+                            <p key={i}>{line}</p>
+                        ))}
+                    </div>
+
+                    <h2 className='text-xl font-bold text-foreground mb-4'>이번 주 인기 스토리</h2>
+                    <div className='space-y-3'>
+                        {data.stories.map((story) => (
+                            <StoryCard key={story.id} story={story} summary={story.summary} />
+                        ))}
+                    </div>
+                </div>
+            </Layout>,
+        )
+
+        return c.html(`<!DOCTYPE html>${html}`)
+    } catch {
         const html = renderToString(
             <Layout title='다이제스트를 찾을 수 없습니다'>
                 <div className='text-center py-12'>
@@ -315,51 +305,22 @@ pages.get('/weekly/:week', async (c) => {
         )
         return c.html(`<!DOCTYPE html>${html}`, 404)
     }
-
-    const storyIds = (digest[0].storyIds ?? []) as number[]
-    const storyList = storyIds.length > 0 ? await db.select().from(stories).where(inArray(stories.id, storyIds)).orderBy(desc(stories.score)) : []
-
-    const summaryList = storyIds.length > 0 ? await db.select().from(summaries).where(inArray(summaries.storyId, storyIds)) : []
-
-    const summaryMap = new Map(summaryList.map((s) => [s.storyId, s]))
-
-    const html = renderToString(
-        <Layout title={digest[0].title}>
-            <div className='max-w-4xl mx-auto'>
-                <h1 className='text-2xl font-bold text-foreground mb-4'>{digest[0].title}</h1>
-                <div className='prose max-w-none bg-card rounded-lg p-6 shadow-sm border mb-8'>
-                    {digest[0].content.split('\n').map((line, i) => (
-                        <p key={i}>{line}</p>
-                    ))}
-                </div>
-
-                <h2 className='text-xl font-bold text-foreground mb-4'>이번 주 인기 스토리</h2>
-                <div className='space-y-3'>
-                    {storyList.map((story) => (
-                        <StoryCard key={story.id} story={story} summary={summaryMap.get(story.id)} />
-                    ))}
-                </div>
-            </div>
-        </Layout>,
-    )
-
-    return c.html(`<!DOCTYPE html>${html}`)
 })
 
 pages.get('/monthly', async (c) => {
-    const digestList = await db.select().from(digests).where(eq(digests.digestType, 'monthly')).orderBy(desc(digests.createdAt)).limit(12)
+    const data = await fetchDigests('monthly', 12)
 
     const html = renderToString(
         <Layout title='월간 다이제스트'>
             <h1 className='text-2xl font-bold text-foreground mb-6'>월간 다이제스트</h1>
             <div className='grid gap-4 md:grid-cols-3'>
-                {digestList.map((digest) => (
+                {data.digests.map((digest) => (
                     <a
                         key={digest.id}
                         href={`/monthly/${digest.digestKey}`}
                         className='block bg-card rounded-lg shadow-sm border p-4 hover:shadow-md transition-shadow'>
                         <h3 className='font-medium text-card-foreground'>{digest.title}</h3>
-                        <p className='text-sm text-muted-foreground mt-1'>{((digest.storyIds ?? []) as number[]).length}개 스토리</p>
+                        <p className='text-sm text-muted-foreground mt-1'>{(digest.storyIds ?? []).length}개 스토리</p>
                     </a>
                 ))}
             </div>
@@ -372,13 +333,31 @@ pages.get('/monthly', async (c) => {
 pages.get('/monthly/:month', async (c) => {
     const month = c.req.param('month')
 
-    const digest = await db
-        .select()
-        .from(digests)
-        .where(and(eq(digests.digestType, 'monthly'), eq(digests.digestKey, month)))
-        .limit(1)
+    try {
+        const data = await fetchDigestDetail('monthly', month)
 
-    if (digest.length === 0) {
+        const html = renderToString(
+            <Layout title={data.digest.title}>
+                <div className='max-w-4xl mx-auto'>
+                    <h1 className='text-2xl font-bold text-foreground mb-4'>{data.digest.title}</h1>
+                    <div className='prose max-w-none bg-card rounded-lg p-6 shadow-sm border mb-8'>
+                        {data.digest.content.split('\n').map((line, i) => (
+                            <p key={i}>{line}</p>
+                        ))}
+                    </div>
+
+                    <h2 className='text-xl font-bold text-foreground mb-4'>이번 달 인기 스토리</h2>
+                    <div className='space-y-3'>
+                        {data.stories.map((story) => (
+                            <StoryCard key={story.id} story={story} summary={story.summary} />
+                        ))}
+                    </div>
+                </div>
+            </Layout>,
+        )
+
+        return c.html(`<!DOCTYPE html>${html}`)
+    } catch {
         const html = renderToString(
             <Layout title='다이제스트를 찾을 수 없습니다'>
                 <div className='text-center py-12'>
@@ -389,64 +368,22 @@ pages.get('/monthly/:month', async (c) => {
         )
         return c.html(`<!DOCTYPE html>${html}`, 404)
     }
-
-    const storyIds = (digest[0].storyIds ?? []) as number[]
-    const storyList = storyIds.length > 0 ? await db.select().from(stories).where(inArray(stories.id, storyIds)).orderBy(desc(stories.score)) : []
-
-    const summaryList = storyIds.length > 0 ? await db.select().from(summaries).where(inArray(summaries.storyId, storyIds)) : []
-
-    const summaryMap = new Map(summaryList.map((s) => [s.storyId, s]))
-
-    const html = renderToString(
-        <Layout title={digest[0].title}>
-            <div className='max-w-4xl mx-auto'>
-                <h1 className='text-2xl font-bold text-foreground mb-4'>{digest[0].title}</h1>
-                <div className='prose max-w-none bg-card rounded-lg p-6 shadow-sm border mb-8'>
-                    {digest[0].content.split('\n').map((line, i) => (
-                        <p key={i}>{line}</p>
-                    ))}
-                </div>
-
-                <h2 className='text-xl font-bold text-foreground mb-4'>이번 달 인기 스토리</h2>
-                <div className='space-y-3'>
-                    {storyList.map((story) => (
-                        <StoryCard key={story.id} story={story} summary={summaryMap.get(story.id)} />
-                    ))}
-                </div>
-            </div>
-        </Layout>,
-    )
-
-    return c.html(`<!DOCTYPE html>${html}`)
 })
 
 pages.get('/tag/:name', async (c) => {
     const name = decodeURIComponent(c.req.param('name'))
 
-    const tagInfo = await db.select().from(tags).where(eq(tags.name, name)).limit(1)
-
-    const storyList = await db
-        .select()
-        .from(stories)
-        .where(sql`JSON_CONTAINS(${stories.tags}, ${JSON.stringify(name)})`)
-        .orderBy(desc(stories.score))
-        .limit(50)
-
-    const storyIds = storyList.map((s) => s.id)
-    const summaryList = storyIds.length > 0 ? await db.select().from(summaries).where(inArray(summaries.storyId, storyIds)) : []
-    const summaryMap = new Map(summaryList.map((s) => [s.storyId, s]))
+    const data = await fetchTagStories(name, 1, 50)
+    const summaryMap = new Map(data.summaries.map((s) => [s.storyId, s]))
 
     const html = renderToString(
         <Layout title={`태그: ${name}`}>
-            <h1 className='text-2xl font-bold text-foreground mb-6'>
-                {name}
-                {tagInfo[0] && <span className='text-sm font-normal text-muted-foreground ml-2'>({tagInfo[0].usageCount}개 스토리)</span>}
-            </h1>
+            <h1 className='text-2xl font-bold text-foreground mb-6'>{name}</h1>
             <div className='space-y-3'>
-                {storyList.length === 0 ? (
+                {data.stories.length === 0 ? (
                     <p className='text-muted-foreground'>해당 태그의 스토리가 없습니다.</p>
                 ) : (
-                    storyList.map((story) => <StoryCard key={story.id} story={story} summary={summaryMap.get(story.id)} />)
+                    data.stories.map((story) => <StoryCard key={story.id} story={story} summary={summaryMap.get(story.id)} />)
                 )}
             </div>
         </Layout>,
@@ -456,13 +393,13 @@ pages.get('/tag/:name', async (c) => {
 })
 
 pages.get('/tags', async (c) => {
-    const tagList = await db.select().from(tags).orderBy(desc(tags.usageCount)).limit(50)
+    const data = await fetchTags()
 
     const html = renderToString(
         <Layout title='태그 목록'>
             <h1 className='text-2xl font-bold text-foreground mb-6'>태그</h1>
             <div className='flex flex-wrap gap-2'>
-                {tagList.map((tag) => (
+                {data.tags.map((tag) => (
                     <a
                         key={tag.id}
                         href={`/tag/${encodeURIComponent(tag.name)}`}
@@ -477,6 +414,8 @@ pages.get('/tags', async (c) => {
 
     return c.html(`<!DOCTYPE html>${html}`)
 })
+
+const HUB_API_URL = process.env.HUB_API_URL ?? 'https://api.gumyo.net'
 
 pages.get('/subscribe', async (c) => {
     const html = renderToString(
@@ -563,6 +502,7 @@ pages.get('/subscribe', async (c) => {
             <script
                 dangerouslySetInnerHTML={{
                     __html: `
+                const API_BASE = '${HUB_API_URL}/api/hn/webhooks/public';
                 const form = document.getElementById('webhook-form');
                 const msg = document.getElementById('form-message');
 
@@ -572,7 +512,7 @@ pages.get('/subscribe', async (c) => {
                     const digestTypes = formData.getAll('digestTypes');
 
                     try {
-                        const res = await fetch('/api/webhooks', {
+                        const res = await fetch(API_BASE + '/register', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -586,7 +526,7 @@ pages.get('/subscribe', async (c) => {
                             msg.className = 'mt-3 text-sm text-green-600';
                             form.reset();
                         } else {
-                            msg.textContent = data.error || '등록 실패';
+                            msg.textContent = data.error?.message || '등록 실패';
                             msg.className = 'mt-3 text-sm text-red-600';
                         }
                     } catch (err) {
@@ -644,18 +584,18 @@ pages.get('/subscribe', async (c) => {
 
                     const formData = new FormData(deleteForm);
                     try {
-                        const res = await fetch('/api/webhooks/delete-by-url', {
+                        const res = await fetch(API_BASE + '/unregister', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ url: formData.get('url') })
                         });
                         const data = await res.json();
                         if (res.ok) {
-                            deleteMsg.textContent = data.message;
+                            deleteMsg.textContent = '구독이 해제되었습니다.';
                             deleteMsg.className = 'mt-3 text-sm text-green-600';
                             deleteForm.reset();
                         } else {
-                            deleteMsg.textContent = data.error || '삭제 실패';
+                            deleteMsg.textContent = data.error?.message || '삭제 실패';
                             deleteMsg.className = 'mt-3 text-sm text-red-600';
                         }
                     } catch {

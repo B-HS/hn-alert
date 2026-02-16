@@ -1,6 +1,5 @@
 import type { FC } from 'react'
-import type { Comment } from '@db/schema'
-import { cn } from '@lib/utils'
+import type { Comment } from '../types/hn'
 
 type CommentTreeProps = {
     comments: Comment[]
@@ -47,11 +46,11 @@ const CommentItem: FC<CommentItemProps> = ({ comment, children = [] }) => {
 }
 
 export const CommentTree: FC<CommentTreeProps> = ({ comments }) => {
-    const buildTree = (comments: Comment[]) => {
+    const buildTree = (commentList: Comment[]) => {
         const map = new Map<number, Comment[]>()
         const roots: Comment[] = []
 
-        comments.forEach((comment) => {
+        commentList.forEach((comment) => {
             if (comment.depth === 0) {
                 roots.push(comment)
             } else if (comment.parentId) {

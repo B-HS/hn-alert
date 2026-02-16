@@ -9,16 +9,7 @@
         "jsx": "react-jsx",
         "jsxImportSource": "react",
         "outDir": "./dist",
-        "baseUrl": ".",
-        "paths": {
-            "@db": ["db/index.ts"],
-            "@db/*": ["db/*"],
-            "@services/*": ["services/*"],
-            "@routes/*": ["routes/*"],
-            "@components/*": ["components/*"],
-            "@config/*": ["config/*"],
-            "@lib/*": ["lib/*"]
-        }
+        "baseUrl": "."
     },
     "exclude": ["node_modules"]
 }

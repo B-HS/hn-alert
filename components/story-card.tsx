@@ -1,8 +1,8 @@
 import type { FC } from 'react'
-import type { Story, Summary } from '@db/schema'
-import { cn } from '@lib/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card'
-import { Badge } from '@components/ui/badge'
+import type { Story, Summary } from '../types/hn'
+import { cn } from '../lib/utils'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Badge } from './ui/badge'
 import { ArrowUp, MessageSquare, ExternalLink } from 'lucide-react'
 
 type StoryCardProps = {
